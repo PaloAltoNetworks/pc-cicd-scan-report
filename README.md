@@ -12,10 +12,15 @@ The script will prompt you for Prisma Cloud credentials when run for the first t
 
 These credentials will be stored in your "HOME/.prismacloud" directory in a file called "credentials.json".
 
-This script takes 1 command line argument, the look back date time. This value sets the cutoff datetime of CICD Scans to be included in the report. All scans with a launch date between now and the specified date will be included.
+This script takes 2 optional command line arguments, the look back date time and a target policy name. 
+-t --time  This value sets the cutoff datetime of CICD Scans to be included in the report. All scans with a launch date between now and the specified date will be included.
+-p --policy  The policy name you wish to target in the scripts Full Report csv.
 
 ```bash
+python3 cicd_report.py
 python3 cicd_report.py -t "2024-01-31"
+python3 cicd_report -p "Storage Account name does not follow naming rules"
+python3 cicd_report -t "2024-01-31" -p "Storage Account name does not follow naming rules"
 ```
 
 # Interpreting the results

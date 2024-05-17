@@ -24,8 +24,12 @@ def get_repos(session):
 
     return repositories
 
-def get_runs(session, repositories, look_back_data_string):
-    look_back_date_object = datetime.strptime(look_back_data_string, '%Y-%m-%d')
+def get_runs(session, repositories, look_back_data_string=None):
+
+    look_back_date_object = object
+    if look_back_data_string:
+        look_back_date_object = datetime.strptime(look_back_data_string, '%Y-%m-%d')
+
     runs = []
     for repo in repositories:
         #Get runs
@@ -41,7 +45,10 @@ def get_runs(session, repositories, look_back_data_string):
             run_date_obj = datetime.strptime(run_create_date, date_format)
 
             #Only get runs that happened AFTER our target look back date
-            if run_date_obj >= look_back_date_object:
+            if look_back_data_string:
+                if run_date_obj >= look_back_date_object:
+                    runs.append(run)
+            else:
                 runs.append(run)
 
     return runs
@@ -92,7 +99,7 @@ def get_resources(session, repo, run):
 
     return resources
 
-def get_errors(repositories, runs, resources):
+def get_errors(repositories, runs, resources, target_policy_list = []):
     errors = []
     count = 0
     for resource in resources:
@@ -132,7 +139,12 @@ def get_errors(repositories, runs, resources):
                 res = session.request('POST', '/bridgecrew/api/v2/resources/code_review_scan/buildtime/errors', json=payload)
 
                 if res:
-                    errors.extend(res.json()['errors'])
+                    if target_policy_list:
+                        for error in res.json()['errors']:
+                            if error['title'] in target_policy_list:
+                                errors.append(error)
+                    else:
+                        errors.extend(res.json()['errors'])
 
     return errors
 
@@ -183,7 +195,8 @@ if __name__ == '__main__':
         description='What the program does',
         epilog=''
     )
-    parser.add_argument('-t', '--time', required=True, help='YEAR-MONTH-DAY. EX: 2023-02-31')
+    parser.add_argument('-t', '--time', help='YEAR-MONTH-DAY. EX: "2023-02-31"', default=None)
+    parser.add_argument('-p', '--policy', help='Full Policy Name. EX: "Storage Account name does not follow naming rules"', default=[])
     args = parser.parse_args()
 
     repositories = get_repos(session)
@@ -199,7 +212,7 @@ if __name__ == '__main__':
             if run['fromRepoId'] == repo['id']: #only get resources for runs that were performed on that repo
                 resources.extend(get_resources(session, repo, run))
 
-    errors = get_errors(repositories, runs, resources)
+    errors = get_errors(repositories, runs, resources, args.policy)
 
     #Create complete CSV with resources and policy names
     create_csv_report_errors(repositories, runs, errors)
