@@ -87,8 +87,6 @@ def get_resource_data(repo, run):
 
         if res.json():
             if res.json()['data']:
-                print(offset, str(len(res.json()['data'])) + '/' + str(limit))
-
                 resource_data.extend(res.json()['data'])
 
                 offset += limit
@@ -230,9 +228,7 @@ def create_csv_report_errors(repositories, runs, resources_data):
 
                 for res in resources:
                     row = [repo['fullRepositoryName'], run['runId'], run['creationDate'], run['runStatus'], run['scanStatus'], res.get('resourceId','N/A'), res['policy'], res['codeCategory'], res['severity']]
-
-
-                writer.writerow(row)
+                    writer.writerow(row)
 
 
 if __name__ == '__main__':
