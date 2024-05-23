@@ -212,7 +212,8 @@ def create_csv_report_runs(repositories, runs):
                 writer.writerow(row)
 
 
-def create_csv_report_errors(repositories, runs, resources_data):
+def create_csv_report_errors(repositories, runs, resources_data, target_policies=None):
+    print('Creating CSV export...')
     with open('full_report.csv', 'w') as outfile:
         writer = csv.writer(outfile)
         headers = ['Repository Name', 'Run ID', 'Run Time', 'Run Status', 'Run Result', 'Resource Name', 'Policy Name', 'Category', 'Severity']
@@ -227,8 +228,13 @@ def create_csv_report_errors(repositories, runs, resources_data):
                 resources = resources_data.get(run['runId'],[])
 
                 for res in resources:
+                    if target_policies:
+                        if res['policy'] not in target_policies:
+                            continue
+
                     row = [repo['fullRepositoryName'], run['runId'], run['creationDate'], run['runStatus'], run['scanStatus'], res.get('resourceId','N/A'), res['policy'], res['codeCategory'], res['severity']]
                     writer.writerow(row)
+    print('Done.')
 
 
 if __name__ == '__main__':
@@ -239,8 +245,22 @@ if __name__ == '__main__':
         epilog=''
     )
     parser.add_argument('-t', '--time', help='YEAR-MONTH-DAY. EX: "2023-02-31"', default=None)
-    parser.add_argument('-p', '--policy', help='Full Policy Name. EX: "Storage Account name does not follow naming rules"', default=[])
+    parser.add_argument('-p', '--policy', help='Full Policy Name. Supply multiple comma separated. EX: "Storage Account name does not follow naming rules"', default=[])
     args = parser.parse_args()
+
+    polices_list = []
+
+    polices_list = args.policy.split(',')
+
+    if polices_list:
+        print()
+        print('Target Policies List:', polices_list)
+        print()
+
+    if args.time:
+        print()
+        print('Time Range look back:', args.time)
+        print()
 
     repositories = get_repos(session)
     runs = get_runs(session, repositories, args.time)
@@ -264,6 +284,6 @@ if __name__ == '__main__':
                     )
 
     #Create complete CSV with resources and policy names
-    create_csv_report_errors(repositories, runs, resource_data_index)
+    create_csv_report_errors(repositories, runs, resource_data_index, polices_list)
 
 
