@@ -249,8 +249,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     polices_list = []
-
-    polices_list = args.policy.split(',')
+    if args.policy:
+        polices_list = args.policy.split(',')
 
     if polices_list:
         print()
