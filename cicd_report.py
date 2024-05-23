@@ -3,6 +3,7 @@ import json
 import argparse
 import csv
 from datetime import datetime
+import csv
 
 session_managers = session_loader.load_config()
 session = session_managers[0].create_cspm_session()
@@ -52,101 +53,149 @@ def get_runs(session, repositories, look_back_data_string=None):
                 runs.append(run)
 
     return runs
-    
-def get_resources(session, repo, run):
+
+def get_resource_data(repo, run):
     repo_id = repo['id']
     run_id = run['runId']
-    limit = 50
+    resource_data = []
+
+    limit = 1000
     offset = 0
-    counter = 0
-    resources = []
 
     while True:
-        payload = {
+        payload ={
             "filters": {
-                "repositories": [repo_id],
-                "runId": run_id,
                 "checkStatus": "Error",
-                "codeCategories": [] 
-            },
+                "enforcementLevel": [
+                    "HARD_FAIL",
+                    "SOFT_FAIL"
+                ],
+                "repositories": [
+                    repo_id
+                ],
+                "runId": run_id,
+                },
             "search": {
                 "scopes": [],
                 "term": ""
             },
-            "offset": offset,
             "limit": limit,
-            "sortBy": [
-                {
-                    "key": "Severity",
-                    "direction": "DESC"
-                },
-                {
-                    "key": "Count",
-                    "direction": "DESC"
-                }
-            ]
+            "offset": offset
         }
+        print('Scan Results for run:', run_id)
+        res = session.request('POST','/code/api/v2/code-issues/code_review_scan', json=payload)
 
-        res = session.request('POST', '/bridgecrew/api/v2/errors/code_review_scan/resources', json=payload)
+        if res.json():
+            if res.json()['data']:
+                print(offset, str(len(res.json()['data'])) + '/' + str(limit))
 
-        if len(res.json().get('data',[])) < limit:
-            resources.extend(res.json().get('data',[]))
-            break
+                resource_data.extend(res.json()['data'])
+
+                offset += limit
+
+                if len(res.json()['data']) < limit:
+                    break
+            else:
+                break
         else:
-            counter += 1
-            offset = counter * limit
-            resources.extend(res.json()['data'])
+            break
 
-    return resources
+    return resource_data
+    
+# def get_resources(session, repo, run):
+#     repo_id = repo['id']
+#     run_id = run['runId']
+#     limit = 50
+#     offset = 0
+#     counter = 0
+#     resources = []
 
-def get_errors(repositories, runs, resources, target_policy_list = []):
-    errors = []
-    count = 0
-    for resource in resources:
-        count += 1
-        print('COUNT', count, '---' 'TOTAL', len(resources))
+#     while True:
+#         payload = {
+#             "filters": {
+#                 "repositories": [repo_id],
+#                 "runId": run_id,
+#                 "checkStatus": "Error",
+#                 "codeCategories": [] 
+#             },
+#             "search": {
+#                 "scopes": [],
+#                 "term": ""
+#             },
+#             "offset": offset,
+#             "limit": limit,
+#             "sortBy": [
+#                 {
+#                     "key": "Severity",
+#                     "direction": "DESC"
+#                 },
+#                 {
+#                     "key": "Count",
+#                     "direction": "DESC"
+#                 }
+#             ]
+#         }
 
-        for repo in repositories:
+#         res = session.request('POST', '/bridgecrew/api/v2/errors/code_review_scan/resources', json=payload)
 
-            #Skip if resource is not from this repo
-            if resource['repository'] != repo['fullRepositoryName']:
-                continue
+#         if len(res.json().get('data',[])) < limit:
+#             resources.extend(res.json().get('data',[]))
+#             break
+#         else:
+#             counter += 1
+#             offset = counter * limit
+#             resources.extend(res.json()['data'])
 
-            for run in runs:
+#     return resources
+
+# def get_errors(repositories, runs, resources, target_policy_list = []):
+#     errors = []
+#     count = 0
+#     for resource in resources:
+#         count += 1
+#         print('COUNT', count, '---' 'TOTAL', len(resources))
+
+#         for repo in repositories:
+
+#             #Skip if resource is not from this repo
+#             if resource['repository'] != repo['fullRepositoryName']:
+#                 continue
+
+#             for run in runs:
                 
-                #Skip if the run is not from this repo
-                if run['fromRepoId'] !=  repo['id']:
-                    continue
+#                 #Skip if the run is not from this repo
+#                 if run['fromRepoId'] !=  repo['id']:
+#                     continue
                 
-                #Get values for payload
-                repo_id = repo['id']
-                repo_name = repo['fullRepositoryName']
-                run_id = run['runId']
-                resource_name = resource['resourceName']
+#                 #Get values for payload
+#                 repo_id = repo['id']
+#                 repo_name = repo['fullRepositoryName']
+#                 run_id = run['runId']
+#                 resource_name = resource['resourceName']
 
-                payload = {
-                    "filters": {
-                        "repositories": [
-                            repo_id
-                        ],
-                        "runId": run_id
-                    },
-                    "resourceName": resource_name,
-                    "repository": repo_name,
-                    "sourceType": "cli" #Only get checkov scan results
-                }
+#                 payload = {
+#                     "filters": {
+#                         "repositories": [
+#                             repo_id
+#                         ],
+#                         "runId": run_id
+#                     },
+#                     "resourceName": resource_name,
+#                     "repository": repo_name,
+#                     "sourceType": "cli" #Only get checkov scan results
+#                 }
 
-                res = session.request('POST', '/bridgecrew/api/v2/resources/code_review_scan/buildtime/errors', json=payload)
+#                 res = session.request('POST', '/bridgecrew/api/v2/resources/code_review_scan/buildtime/errors', json=payload)
 
-                if res:
-                    if target_policy_list:
-                        for error in res.json()['errors']:
-                            if error['title'] in target_policy_list:
-                                errors.append(error)
-                    else:
-                        errors.extend(res.json()['errors'])
+#                 if res:
+#                     if target_policy_list:
+#                         for error in res.json()['errors']:
+#                             if error['title'] in target_policy_list:
+#                                 errors.append(error)
+#                     else:
+#                         errors.extend(res.json()['errors'])
 
-    return errors
+#     return errors
 
 def create_csv_report_runs(repositories, runs):
     with open('runs_report.csv', 'w') as outfile:
@@ -165,27 +214,25 @@ def create_csv_report_runs(repositories, runs):
                 writer.writerow(row)
 
 
-
-def create_csv_report_errors(repositories, runs, errors):
+def create_csv_report_errors(repositories, runs, resources_data):
     with open('full_report.csv', 'w') as outfile:
         writer = csv.writer(outfile)
-        headers = ['Repository Name', 'Run ID', 'Run Time', 'Run Status', 'Run Result', 'Resource Name', 'Policy Name', 'Policy Violation Status', 'Suggested Fix']
+        headers = ['Repository Name', 'Run ID', 'Run Time', 'Run Status', 'Run Result', 'Resource Name', 'Policy Name', 'Category', 'Severity']
         writer.writerow(headers)
 
-        for error in errors:
-            for repo in repositories:
-                #If the resource in the error does not come from this repo, skip this repo.
-                if error['sourceId'] != repo['fullRepositoryName']:
+        for repo in repositories:
+            for run in runs:
+                #Skip if the run is not from this repo
+                if run['fromRepoId'] !=  repo['id']:
                     continue
 
-                for run in runs:
-                    #Skip if the run is not from this repo
-                    if run['fromRepoId'] !=  repo['id']:
-                        continue
-                    
-                    row = [repo['fullRepositoryName'], run['runId'], run['creationDate'], run['runStatus'], run['scanStatus'], error['resourceId'], error['title'], error['violationScanStatus'], error['constructiveTitle']]
+                resources = resources_data.get(run['runId'],[])
 
-                    writer.writerow(row)
+                for res in resources:
+                    row = [repo['fullRepositoryName'], run['runId'], run['creationDate'], run['runStatus'], run['scanStatus'], res.get('resourceId','N/A'), res['policy'], res['codeCategory'], res['severity']]
+
+
+                writer.writerow(row)
 
 
 if __name__ == '__main__':
@@ -206,17 +253,21 @@ if __name__ == '__main__':
     create_csv_report_runs(repositories, runs)
 
     #Gather detailed resource policy scan status data
-    resources = []
+    # resources = []
+    resource_data_index = {}
     for repo in repositories:
         for run in runs:
             if run['fromRepoId'] == repo['id']: #only get resources for runs that were performed on that repo
-                resources.extend(get_resources(session, repo, run))
-
-    errors = get_errors(repositories, runs, resources, args.policy)
+                if run['runId'] in resource_data_index:
+                    resource_data_index[run['runId']].extend(get_resource_data(repo, run))
+                else:
+                    resource_data_index.update(
+                        {
+                            run['runId'] : get_resource_data(repo, run)
+                        }
+                    )
 
     #Create complete CSV with resources and policy names
-    create_csv_report_errors(repositories, runs, errors)
+    create_csv_report_errors(repositories, runs, resource_data_index)
 
 
-
-    #Once errors have been gathered, we can create the CSV report.
